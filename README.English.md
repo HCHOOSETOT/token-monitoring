@@ -4,6 +4,12 @@
 
 Token Monitoring is a Windows x64 companion panel for Codex. It provides quick access to the 5-hour allowance, weekly allowance, and today's local token consumption without repeatedly opening Codex settings.
 
+## Interface Preview
+
+![Token Monitoring running interface](docs/images/token-monitoring-zh-CN.png)
+
+The floating panel combines remaining allowances, reset times, today's token breakdown, and cache hit rate. The Chinese and English packages use the same layout.
+
 ## Features
 
 - Remaining 5-hour allowance with a reset countdown updated every second.
