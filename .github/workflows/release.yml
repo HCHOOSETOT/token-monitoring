@@ -1,0 +1,54 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build, test, and package
+        shell: pwsh
+        run: .\scripts\publish.ps1
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TokenMonitoring-${{ github.ref_name }}
+          path: artifacts/TokenMonitoring-win-x64-*.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @'
+          ## 中文
+
+          Windows x64 Codex 用量监控悬浮窗。下载 `Chinese` 中文包或 `English` 英文包，解压后运行 `TokenMonitoring.exe`。
+
+          ## English
+
+          Windows x64 usage monitor for Codex. Download the `Chinese` or `English` package, extract it, and run `TokenMonitoring.exe`.
+
+          Please review `SECURITY.md` and `THIRD_PARTY_NOTICES.md` before redistribution.
+          '@
+          $assets = Get-ChildItem artifacts\TokenMonitoring-win-x64-*.zip | ForEach-Object FullName
+          gh release create $env:GITHUB_REF_NAME $assets --title "Token Monitoring $env:GITHUB_REF_NAME" --notes $notes
