@@ -4,6 +4,7 @@ using TokenMonitoring.Services;
 var tests = new (string Name, Func<Task> Run)[]
 {
     ("Rate-limit response parsing", TestRateLimitParsing),
+    ("Rate-limit by-id notification parsing", TestRateLimitByIdNotificationParsing),
     ("Daily account usage parsing", TestAccountUsageParsing),
     ("Session usage across midnight", TestSessionUsageAcrossMidnight),
     ("Session parsing from arbitrary Unicode path", TestSessionUsageFromArbitraryPath)
@@ -88,6 +89,30 @@ static Task TestRateLimitParsing()
     Equal(300L, result.Primary?.WindowDurationMinutes, "primary duration");
     Equal(31, result.Secondary?.UsedPercent, "secondary percent");
     Equal("plus", result.PlanType, "plan type");
+    return Task.CompletedTask;
+}
+
+static Task TestRateLimitByIdNotificationParsing()
+{
+    using var document = JsonDocument.Parse("""
+        {
+          "rateLimitsByLimitId": {
+            "codex": {
+              "limitId": "codex",
+              "planType": "plus",
+              "primary": { "used_percent": 29.0, "resets_at": 1781357706, "window_minutes": 300 },
+              "secondary": { "usedPercent": 33, "resetsAt": 1781858592, "windowDurationMins": 10080 }
+            }
+          }
+        }
+        """);
+
+    var result = AppServerProtocolParser.ParseRateLimitNotification(document.RootElement);
+    Equal(29, result.Primary?.UsedPercent, "by-id primary percent");
+    Equal(1781357706L, result.Primary?.ResetsAtUnixSeconds, "by-id primary reset");
+    Equal(300L, result.Primary?.WindowDurationMinutes, "by-id primary duration");
+    Equal(33, result.Secondary?.UsedPercent, "by-id secondary percent");
+    Equal("plus", result.PlanType, "by-id plan type");
     return Task.CompletedTask;
 }
 

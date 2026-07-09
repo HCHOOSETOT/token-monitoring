@@ -8,17 +8,15 @@ public static class AppServerProtocolParser
 {
     public static RateLimitSnapshot ParseRateLimitsResponse(JsonElement result)
     {
-        var snapshot = result.TryGetProperty("rateLimitsByLimitId", out var byId)
-            && byId.ValueKind == JsonValueKind.Object
-            && byId.TryGetProperty("codex", out var codex)
-                ? codex
-                : result.GetProperty("rateLimits");
-
-        return ParseRateLimitSnapshot(snapshot);
+        return TryGetRateLimitSnapshot(result, out var snapshot)
+            ? ParseRateLimitSnapshot(snapshot)
+            : new RateLimitSnapshot(null, null);
     }
 
     public static RateLimitSnapshot ParseRateLimitNotification(JsonElement parameters) =>
-        ParseRateLimitSnapshot(parameters.GetProperty("rateLimits"));
+        TryGetRateLimitSnapshot(parameters, out var snapshot)
+            ? ParseRateLimitSnapshot(snapshot)
+            : new RateLimitSnapshot(null, null);
 
     public static long? ParseDailyAccountUsage(JsonElement result, DateOnly localDate)
     {
@@ -62,16 +60,85 @@ public static class AppServerProtocolParser
             return null;
         }
 
+        if (!TryGetInt32(window, out var usedPercent, "usedPercent", "used_percent"))
+        {
+            return null;
+        }
+
         return new RateLimitWindowSnapshot(
-            window.GetProperty("usedPercent").GetInt32(),
-            GetOptionalInt64(window, "resetsAt"),
-            GetOptionalInt64(window, "windowDurationMins"));
+            usedPercent,
+            GetOptionalInt64(window, "resetsAt", "resets_at"),
+            GetOptionalInt64(window, "windowDurationMins", "windowMinutes", "window_minutes"));
     }
 
-    private static long? GetOptionalInt64(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetInt64()
-            : null;
+    private static bool TryGetRateLimitSnapshot(JsonElement element, out JsonElement snapshot)
+    {
+        if (element.TryGetProperty("rateLimitsByLimitId", out var byId)
+            && byId.ValueKind == JsonValueKind.Object)
+        {
+            if (byId.TryGetProperty("codex", out snapshot))
+            {
+                return true;
+            }
+
+            foreach (var limit in byId.EnumerateObject())
+            {
+                snapshot = limit.Value;
+                return true;
+            }
+        }
+
+        if (element.TryGetProperty("rateLimits", out snapshot))
+        {
+            return true;
+        }
+
+        snapshot = default;
+        return false;
+    }
+
+    private static bool TryGetInt32(JsonElement element, out int result, params string[] names)
+    {
+        if (TryGetNumber(element, out var value, names))
+        {
+            if (value.TryGetInt32(out result))
+            {
+                return true;
+            }
+
+            result = checked((int)Math.Round(value.GetDouble(), MidpointRounding.AwayFromZero));
+            return true;
+        }
+
+        result = 0;
+        return false;
+    }
+
+    private static long? GetOptionalInt64(JsonElement element, params string[] names)
+    {
+        if (!TryGetNumber(element, out var value, names))
+        {
+            return null;
+        }
+
+        return value.TryGetInt64(out var integer)
+            ? integer
+            : checked((long)Math.Round(value.GetDouble(), MidpointRounding.AwayFromZero));
+    }
+
+    private static bool TryGetNumber(JsonElement element, out JsonElement value, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out value) && value.ValueKind == JsonValueKind.Number)
+            {
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
 
     private static string? GetOptionalString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

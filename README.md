@@ -4,6 +4,12 @@
 
 Token Monitoring 是一个暂时仅面向 Windows x64 的 Codex 用量悬浮面板。它用于快速查看 5 小时额度、周额度和本机当天的 Token 消耗，避免频繁打开 Codex 设置页面。
 
+## 界面预览
+
+![Token Monitoring 中文运行界面](docs/images/token-monitoring-zh-CN.png)
+
+悬浮面板集中显示剩余额度、重置时间、当天 Token 明细和缓存命中率。中文包与英文包使用相同布局。
+
 ## 主要功能
 
 - 显示 5 小时剩余额度，并按秒更新重置倒计时。

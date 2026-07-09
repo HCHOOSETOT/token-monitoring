@@ -54,12 +54,12 @@ public sealed class UsageMonitorService : IAsyncDisposable
                 await ResetClientAsync();
                 var sessionResult = await _sessionReader.ReadTodayAsync(_codexHome, localDate, cancellationToken);
                 Publish(new UsageSnapshot(
-                    sessionResult.LatestRateLimits?.Primary ?? _current.FiveHour,
-                    sessionResult.LatestRateLimits?.Secondary ?? _current.Week,
+                    _current.FiveHour ?? sessionResult.LatestRateLimits?.Primary,
+                    _current.Week ?? sessionResult.LatestRateLimits?.Secondary,
                     sessionResult.Usage,
                     DateTimeOffset.Now,
                     "Local sessions",
-                    IsStale: sessionResult.LatestRateLimits is null,
+                    IsStale: true,
                     Error: exception.Message));
             }
         }
@@ -104,6 +104,38 @@ public sealed class UsageMonitorService : IAsyncDisposable
             Error = null
         };
         Publish(snapshot);
+        _ = RefreshLocalUsageAfterRateLimitUpdateAsync(update);
+    }
+
+    private async Task RefreshLocalUsageAfterRateLimitUpdateAsync(RateLimitSnapshot update)
+    {
+        if (!await _refreshLock.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            var localDate = DateOnly.FromDateTime(DateTime.Now);
+            var sessionResult = await _sessionReader.ReadTodayAsync(_codexHome, localDate, _lifetime.Token);
+            Publish(new UsageSnapshot(
+                update.Primary ?? _current.FiveHour,
+                update.Secondary ?? _current.Week,
+                sessionResult.Usage,
+                DateTimeOffset.Now,
+                $"Codex live update + local sessions for {localDate:yyyy-MM-dd}"));
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            Publish(_current with { IsStale = true, Error = exception.Message });
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
     }
 
     private async Task MonitorLoopAsync(CancellationToken cancellationToken)

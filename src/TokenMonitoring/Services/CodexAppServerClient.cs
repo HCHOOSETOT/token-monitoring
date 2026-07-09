@@ -154,7 +154,14 @@ public sealed class CodexAppServerClient : IAsyncDisposable
                     && method.GetString() == "account/rateLimits/updated"
                     && root.TryGetProperty("params", out var parameters))
                 {
-                    RateLimitsUpdated?.Invoke(AppServerProtocolParser.ParseRateLimitNotification(parameters));
+                    try
+                    {
+                        RateLimitsUpdated?.Invoke(AppServerProtocolParser.ParseRateLimitNotification(parameters));
+                    }
+                    catch
+                    {
+                        // Ignore malformed push notifications; polling will refresh the canonical values.
+                    }
                 }
             }
         }
